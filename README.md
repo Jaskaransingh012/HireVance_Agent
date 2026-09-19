@@ -428,4 +428,4 @@ A: Yes, but you'll exceed WhatsApp's free tier (1,000 conversations/month). Arch
 
 ---
 
-**Built with ❤️ by [Your Name](https://github.com/Jaskaransingh012)**
+**Built with ❤️ by [JASKARAN SINGH](https://github.com/Jaskaransingh012)**
