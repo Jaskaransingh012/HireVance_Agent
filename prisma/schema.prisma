@@ -1,0 +1,116 @@
+// Prisma schema for the Multi-User WhatsApp Jobs & Hackathons discovery agent
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OpportunityType {
+  JOB
+  INTERNSHIP
+  HACKATHON
+  COMPETITION
+}
+
+enum OpportunityStatus {
+  OPEN
+  CLOSED
+  EXPIRED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Opportunity {
+  id             String            @id @default(cuid())
+  type           OpportunityType
+  title          String
+  company        String?
+  description    String?
+  url            String
+  canonicalUrl   String
+  location       String?
+  remote         Boolean           @default(false)
+  employmentType String?
+  deadline       DateTime?
+  source         String
+  externalId     String?
+  // fingerprint is the primary de-dup key: SHA-256 hash of normalized
+  // (company+title+location+employmentType) for jobs, or
+  // (organizer+title+startDate) for hackathons.
+  fingerprint    String            @unique
+  status         OpportunityStatus @default(OPEN)
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  notifications Notification[]
+
+  // canonicalUrl is also indexed/unique since it's our secondary
+  // dedup signal (used to look up before we even compute a fingerprint).
+  @@unique([canonicalUrl])
+  @@index([source])
+  @@index([type])
+  @@index([status])
+}
+
+model User {
+  id                      String   @id @default(cuid())
+  phoneNumber             String   @unique // Phone number in international format, e.g. +14155552671 or 14155552671
+  name                    String?
+  desiredRoles            String[] @default([])
+  desiredLocations        String[] @default([])
+  desiredOpportunityTypes String[] @default([])
+  excludedCompanies       String[] @default([])
+  remoteOnly              Boolean  @default(false)
+  minimumRelevanceScore   Int      @default(75)
+  keywords                String[] @default([])
+  rawPrompt               String?  // Store the user's latest natural language preference prompt
+  isActive                Boolean  @default(true)
+  onboardedAt             DateTime @default(now())
+  lastMessageAt           DateTime @default(now())
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  notifications Notification[]
+
+  @@index([isActive])
+}
+
+model Notification {
+  id            String             @id @default(cuid())
+  opportunityId String
+  opportunity   Opportunity        @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel       String             @default("whatsapp")
+  type          String             @default("NEW")
+  sentAt        DateTime?
+  status        NotificationStatus @default(PENDING)
+  createdAt     DateTime           @default(now())
+
+  // Prevents double notifications per user per opportunity
+  @@unique([opportunityId, userId, channel, type])
+  @@index([userId])
+  @@index([opportunityId])
+}
+
+model Source {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  url           String
+  type          String // "jobs" | "hackathons" | "events"
+  enabled       Boolean   @default(true)
+  lastCheckedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
